@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<module>
+    <name>ps178to9migration</name>
+    <displayName><![CDATA[PS Migration 1.7 to 9]]></displayName>
+    <version><![CDATA[1.0.0]]></version>
+    <description><![CDATA[Export and import database tables for PrestaShop migration]]></description>
+    <author><![CDATA[Migration Tools]]></author>
+    <tab><![CDATA[administration]]></tab>
+	<confirmUninstall><![CDATA[Â¿EstÃ¡s seguro que quieres desinstalar este mÃ³dulo?]]></confirmUninstall>
+    <is_configurable>1</is_configurable>
+    <need_instance>0</need_instance>
+</module>

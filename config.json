@@ -1,0 +1,15 @@
+{
+  "name": "ps178to9migration",
+  "displayName": "PrestaShop 1.7.8 to 9 Migration",
+  "version": "1.0.0",
+  "description": "Export and migrate database tables from PrestaShop 1.7.8 to 9",
+  "author": "Your Name",
+  "tab": "administration",
+  "ps_versions_compliancy": {
+    "min": "1.7.0.0",
+    "max": "9.99.99"
+  },
+  "need_instance": 0,
+  "is_configurable": 1,
+  "bootstrap": true
+}

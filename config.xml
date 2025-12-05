@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<module>
+  <name>ps178to9migration</name>
+  <displayName>PS Migration 1.7 to 9</displayName>
+  <version>1.0.0</version>
+  <description>Export and import database tables for PrestaShop migration</description>
+  <author>Migration Tools</author>
+  <tab>administration</tab>
+  <is_configurable>1</is_configurable>
+</module>

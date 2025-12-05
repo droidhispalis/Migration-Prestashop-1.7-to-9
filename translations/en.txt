@@ -1,0 +1,15 @@
+en|PrestaShop 1.7.8 to 9 Migration
+en|Export and migrate database tables from PrestaShop 1.7.8 to 9
+en|Database Migration Configuration
+en|Export Format
+en|Export Mode
+en|Select Tables to Export
+en|Export All Compatible Tables
+en|Generate Export
+en|Quick Export All (JSON)
+en|Single File
+en|Multiple Files (one per table)
+en|You do not have permission to export data.
+en|No tables selected for export
+en|Invalid export format
+en|Are you sure you want to uninstall this module?
