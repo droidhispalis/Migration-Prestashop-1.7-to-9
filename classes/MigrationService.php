@@ -17,6 +17,7 @@ class MigrationService
         'category_lang' => 'Category translations',
         'category_shop' => 'Category shop association',
         'category_product' => 'Category-Product relations',
+        'category_group' => 'Category group permissions (CRITICAL for visibility)',
         
         // Products - CRITICAL
         'product' => 'Products',
