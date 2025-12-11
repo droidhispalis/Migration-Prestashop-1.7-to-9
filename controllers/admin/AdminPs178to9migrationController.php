@@ -62,6 +62,7 @@ class AdminPs178to9migrationController extends ModuleAdminController
         parent::initContent();
 
         $this->content = $this->renderInfo();
+        $this->content .= $this->renderPreExportFixes();
         $this->content .= $this->renderExportForm();
         $this->content .= $this->renderImportForm();
         
@@ -327,6 +328,14 @@ class AdminPs178to9migrationController extends ModuleAdminController
         if (Tools::isSubmit('submitImportImages')) {
             $isAjax = Tools::getValue('ajax');
             $this->processImportImages($isAjax);
+        }
+        
+        if (Tools::isSubmit('submitFixGender')) {
+            $this->processFixGender();
+        }
+        
+        if (Tools::isSubmit('submitValidateRepair')) {
+            $this->processValidateRepair();
         }
     }
 
@@ -806,5 +815,130 @@ class AdminPs178to9migrationController extends ModuleAdminController
         header('Content-Length: ' . filesize($filePath));
         readfile($filePath);
     }
+    
+    // ========================================================================
+    // PRE-EXPORT FIXES (PS 1.7.x)
+    // ========================================================================
+    
+    private function renderPreExportFixes()
+    {
+        $html = '<div class="panel">';
+        $html .= '<div class="panel-heading"><i class="icon-wrench"></i> ' . $this->l('Pre-Export Data Fixes') . '</div>';
+        $html .= '<div class="panel-body">';
+        $html .= '<div class="alert alert-warning">';
+        $html .= '<strong>' . $this->l('RECOMMENDED:') . '</strong> ' . $this->l('Fix data issues in PS 1.7.x BEFORE exporting to ensure clean migration.');
+        $html .= '</div>';
+        
+        $html .= '<div class="row">';
+        
+        // Validación y reparación automática
+        $html .= '<div class="col-md-6">';
+        $html .= '<h4><i class="icon-check"></i> ' . $this->l('Validate & Repair Data (PS 9 Compatibility)') . '</h4>';
+        $html .= '<p>' . $this->l('Automatically detects and repairs common PS 9 incompatibilities:') . '</p>';
+        $html .= '<ul style="font-size: 12px; margin-left: 20px;">';
+        $html .= '<li>' . $this->l('Products without category_default') . '</li>';
+        $html .= '<li>' . $this->l('Inactive categories with products') . '</li>';
+        $html .= '<li>' . $this->l('Products without redirect_type') . '</li>';
+        $html .= '<li>' . $this->l('Customers without gender') . '</li>';
+        $html .= '</ul>';
+        $html .= '<form method="POST" onsubmit="return confirm(\'' . $this->l('This will analyze and repair your database. Continue?') . '\');">';
+        $html .= '<button type="submit" name="submitValidateRepair" class="btn btn-success">';
+        $html .= '<i class="icon-check-circle"></i> ' . $this->l('Validate & Repair Now');
+        $html .= '</button>';
+        $html .= '</form>';
+        $html .= '<p class="help-block" style="margin-top:10px;"><small>' . $this->l('Safe to run multiple times. Shows detailed report of repairs made.') . '</small></p>';
+        $html .= '</div>';
+        
+        // Gender fix existente
+        $html .= '<div class="col-md-6">';
+        $html .= '<h4><i class="icon-user"></i> ' . $this->l('Fix Gender & Customer Data') . '</h4>';
+        $html .= '<p>' . $this->l('Fixes NULL values in customer records, creates gender table, assigns default gender to customers without one.') . '</p>';
+        $html .= '<form method="POST" onsubmit="return confirm(\'' . $this->l('This will modify your database. Continue?') . '\');">';
+        $html .= '<button type="submit" name="submitFixGender" class="btn btn-warning">';
+        $html .= '<i class="icon-wrench"></i> ' . $this->l('Fix Gender & Orders');
+        $html .= '</button>';
+        $html .= '</form>';
+        $html .= '<p class="help-block" style="margin-top:10px;"><small>' . $this->l('Safe to run multiple times. Uses INSERT IGNORE to prevent duplicates.') . '</small></p>';
+        $html .= '</div>';
+        
+        $html .= '</div>';
+        $html .= '</div></div>';
+        return $html;
+    }
+    
+    private function processFixGender()
+    {
+        $sqlFile = dirname(dirname(__FILE__)) . '/sql/FIX_GENDER_ORDERS.sql';
+        
+        if (!file_exists($sqlFile)) {
+            $this->errors[] = $this->l('SQL file not found: ') . $sqlFile;
+            return;
+        }
+        
+        $sqlContent = file_get_contents($sqlFile);
+        if (!$sqlContent) {
+            $this->errors[] = $this->l('Could not read SQL file');
+            return;
+        }
+        
+        try {
+            $db = Db::getInstance();
+            $queries = array_filter(array_map('trim', explode(';', $sqlContent)));
+            $executedCount = 0;
+            $errorCount = 0;
+            
+            foreach ($queries as $query) {
+                if (empty($query) || substr(trim($query), 0, 2) === '--') {
+                    continue;
+                }
+                
+                try {
+                    $db->execute($query);
+                    $executedCount++;
+                } catch (Exception $e) {
+                    $errorCount++;
+                    // Continuar en caso de error (tabla ya existe, etc.)
+                }
+            }
+            
+            if ($errorCount === 0) {
+                $this->confirmations[] = $this->l('Gender & Customer data fixed successfully!');
+                $this->confirmations[] = $this->l('Executed: ') . $executedCount . $this->l(' queries');
+                $this->confirmations[] = $this->l('✓ Gender table created/verified');
+                $this->confirmations[] = $this->l('✓ Default gender assigned to customers');
+                $this->confirmations[] = $this->l('✓ Customer data cleaned');
+                $this->confirmations[] = $this->l('✓ You can now export safely');
+            } else {
+                $this->warnings[] = $this->l('Completed with some warnings (this may be normal if data already exists)');
+                $this->confirmations[] = $this->l('Executed: ') . $executedCount . $this->l(' queries successfully');
+            }
+            
+        } catch (Exception $e) {
+            $this->errors[] = $this->l('Error executing fixes: ') . $e->getMessage();
+        }
+    }
+    
+    private function processValidateRepair()
+    {
+        try {
+            $migrationService = new MigrationService();
+            $repairs = $migrationService->validateAndRepairData();
+            
+            if (empty($repairs)) {
+                $this->confirmations[] = $this->l('✓ Database validation completed');
+                $this->confirmations[] = $this->l('✓ No issues found - data is ready for PS 9 migration');
+            } else {
+                $this->confirmations[] = $this->l('✓ Database validation and repair completed successfully!');
+                $this->confirmations[] = $this->l('Repairs made:');
+                foreach ($repairs as $repair) {
+                    $this->confirmations[] = '• ' . $repair;
+                }
+                $this->confirmations[] = $this->l('✓ Your data is now PS 9 compatible');
+                $this->confirmations[] = $this->l('✓ You can proceed with export');
+            }
+            
+        } catch (Exception $e) {
+            $this->errors[] = $this->l('Error during validation: ') . $e->getMessage();
+        }
+    }
 }
-

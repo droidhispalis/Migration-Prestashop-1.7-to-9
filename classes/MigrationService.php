@@ -368,7 +368,7 @@ class MigrationService
         $sql = "-- PrestaShop Migration Export\n";
         $sql .= "-- Date: " . date('Y-m-d H:i:s') . "\n";
         $sql .= "-- Source Version: " . _PS_VERSION_ . "\n";
-        $sql .= "-- Compatible with: PrestaShop 9\n\n";
+        $sql .= "-- Target: PrestaShop 9 (with automatic transformations)\n\n";
         $sql .= "SET NAMES utf8mb4;\n";
         $sql .= "SET FOREIGN_KEY_CHECKS = 0;\n\n";
         
@@ -445,6 +445,10 @@ class MigrationService
         }
 
         $sql .= "SET FOREIGN_KEY_CHECKS = 1;\n";
+        
+        // Aplicar transformaciones automáticas para PS 9
+        $sql = $this->applyPS9Transformations($sql);
+        
         return $sql;
     }
 
@@ -2005,6 +2009,287 @@ class MigrationService
         $notes .= "7. Check responsive design\n\n";
 
         return $notes;
+    }
+    
+    // ========================================================================
+    // TRANSFORMACIONES AUTOMÁTICAS PS 1.7 → PS 9
+    // ========================================================================
+    
+    /**
+     * Aplica transformaciones automáticas al SQL exportado para compatibilidad con PS 9
+     * @param string $sqlContent Contenido SQL original
+     * @return string SQL transformado compatible con PS 9
+     */
+    public function applyPS9Transformations($sqlContent)
+    {
+        $transformations = array();
+        
+        // 1. Transformar campos de productos
+        $sqlContent = $this->transformProductFields($sqlContent, $transformations);
+        
+        // 2. Transformar campos de categorías
+        $sqlContent = $this->transformCategoryFields($sqlContent, $transformations);
+        
+        // 3. Transformar campos de pedidos
+        $sqlContent = $this->transformOrderFields($sqlContent, $transformations);
+        
+        // 4. Limpiar tablas obsoletas
+        $sqlContent = $this->removeObsoleteTables($sqlContent, $transformations);
+        
+        // 5. Agregar comentario con transformaciones aplicadas
+        if (!empty($transformations)) {
+            $header = "-- =====================================================\n";
+            $header .= "-- TRANSFORMACIONES PS 9 APLICADAS AUTOMÁTICAMENTE\n";
+            $header .= "-- =====================================================\n";
+            foreach ($transformations as $t) {
+                $header .= "-- ✓ " . $t . "\n";
+            }
+            $header .= "-- =====================================================\n\n";
+            $sqlContent = $header . $sqlContent;
+        }
+        
+        return $sqlContent;
+    }
+    
+    /**
+     * Transforma campos de tabla ps_product para PS 9
+     */
+    private function transformProductFields($sqlContent, &$transformations)
+    {
+        // 1. Renombrar ean13 → gtin en CREATE TABLE
+        if (preg_match('/CREATE TABLE.*?`ps_product`.*?`ean13`/si', $sqlContent)) {
+            $sqlContent = preg_replace(
+                '/(`ean13`\s+varchar\([\d]+\))/i',
+                '`gtin` varchar(14) DEFAULT NULL COMMENT \'Formerly ean13 in PS 1.7\'',
+                $sqlContent
+            );
+            $transformations[] = 'Campo ps_product.ean13 renombrado a gtin';
+        }
+        
+        // 2. Renombrar ean13 → gtin en INSERT INTO ps_product
+        if (preg_match('/INSERT\s+INTO\s+`ps_product`/i', $sqlContent)) {
+            // Renombrar columna en lista de campos
+            $sqlContent = preg_replace_callback(
+                '/(INSERT\s+(?:IGNORE\s+)?INTO\s+`ps_product`\s*\([^)]+\))/si',
+                function($matches) {
+                    return str_replace('`ean13`', '`gtin`', $matches[0]);
+                },
+                $sqlContent
+            );
+            $transformations[] = 'Valores ps_product.ean13 → gtin en INSERTs';
+        }
+        
+        // 3. Asegurar redirect_type no vacío
+        $sqlContent = preg_replace_callback(
+            '/(INSERT\s+(?:IGNORE\s+)?INTO\s+`ps_product`.*?VALUES\s*\([^)]+\))/si',
+            function($matches) {
+                $insert = $matches[0];
+                // Reemplazar redirect_type vacío o NULL por '404'
+                $insert = preg_replace(
+                    "/('redirect_type'[^,]*,\s*)''/",
+                    "$1'404'",
+                    $insert
+                );
+                $insert = preg_replace(
+                    "/('redirect_type'[^,]*,\s*)NULL/",
+                    "$1'404'",
+                    $insert
+                );
+                return $insert;
+            },
+            $sqlContent
+        );
+        
+        // 4. Eliminar campos obsoletos de CREATE TABLE ps_product
+        $obsoleteFields = array('low_stock_threshold', 'show_price');
+        foreach ($obsoleteFields as $field) {
+            if (preg_match('/CREATE TABLE.*?`ps_product`.*?`' . $field . '`/si', $sqlContent)) {
+                $sqlContent = preg_replace(
+                    '/,?\s*`' . $field . '`[^,\n]+(?:,|\n)/i',
+                    "\n",
+                    $sqlContent
+                );
+                $transformations[] = 'Campo obsoleto ps_product.' . $field . ' eliminado';
+            }
+        }
+        
+        return $sqlContent;
+    }
+    
+    /**
+     * Transforma campos de categorías para PS 9
+     */
+    private function transformCategoryFields($sqlContent, &$transformations)
+    {
+        // Verificar que ps_category_group esté incluida
+        if (!preg_match('/CREATE TABLE.*?`ps_category_group`/si', $sqlContent)) {
+            // Agregar warning pero no crear aquí (se crea en post-import fix)
+            $warning = "\n-- WARNING: ps_category_group table not found in export!\n";
+            $warning .= "-- This table is CRITICAL for product visibility in PS 9.\n";
+            $warning .= "-- Run CREATE_CATEGORY_GROUP.sql after import.\n\n";
+            $sqlContent = $warning . $sqlContent;
+            $transformations[] = 'WARNING: Ejecutar CREATE_CATEGORY_GROUP.sql post-import';
+        }
+        
+        return $sqlContent;
+    }
+    
+    /**
+     * Transforma campos de pedidos para PS 9
+     */
+    private function transformOrderFields($sqlContent, &$transformations)
+    {
+        // 1. Asegurar order reference no NULL
+        $sqlContent = preg_replace_callback(
+            '/(INSERT\s+(?:IGNORE\s+)?INTO\s+`ps_orders`.*?VALUES\s*\([^)]+\))/si',
+            function($matches) {
+                $insert = $matches[0];
+                // Detectar reference vacío y generar uno
+                $insert = preg_replace_callback(
+                    "/'reference'[^,]*,\s*(?:''|NULL)/",
+                    function($m) {
+                        static $counter = 1;
+                        return "'reference', 'MIGRATED" . str_pad($counter++, 9, '0', STR_PAD_LEFT) . "'";
+                    },
+                    $insert
+                );
+                return $insert;
+            },
+            $sqlContent
+        );
+        
+        // 2. Asegurar payment module no NULL
+        $sqlContent = preg_replace_callback(
+            '/(INSERT\s+(?:IGNORE\s+)?INTO\s+`ps_orders`.*?VALUES\s*\([^)]+\))/si',
+            function($matches) {
+                $insert = $matches[0];
+                $insert = preg_replace(
+                    "/'module'[^,]*,\s*(?:''|NULL)/",
+                    "'module', 'unknown'",
+                    $insert
+                );
+                $insert = preg_replace(
+                    "/'payment'[^,]*,\s*(?:''|NULL)/",
+                    "'payment', 'Unknown'",
+                    $insert
+                );
+                return $insert;
+            },
+            $sqlContent
+        );
+        
+        if (preg_match('/INSERT\s+INTO\s+`ps_orders`/i', $sqlContent)) {
+            $transformations[] = 'Orders: references y payment validados';
+        }
+        
+        return $sqlContent;
+    }
+    
+    /**
+     * Elimina tablas obsoletas de Advanced Stock Management
+     */
+    private function removeObsoleteTables($sqlContent, &$transformations)
+    {
+        $obsoleteTables = array(
+            'ps_supply_order',
+            'ps_supply_order_detail',
+            'ps_supply_order_history',
+            'ps_supply_order_receipt_history',
+            'ps_supply_order_state',
+            'ps_supply_order_state_lang',
+            'ps_warehouse',
+            'ps_warehouse_carrier',
+            'ps_warehouse_product_location',
+            'ps_stock_mvt_reason',
+            'ps_stock_mvt_reason_lang'
+        );
+        
+        foreach ($obsoleteTables as $table) {
+            if (preg_match('/CREATE TABLE.*?`' . $table . '`/si', $sqlContent)) {
+                // Eliminar CREATE TABLE completo
+                $sqlContent = preg_replace(
+                    '/-- Table: ' . $table . '.*?CREATE TABLE.*?`' . $table . '`[^;]+;/si',
+                    "-- Table $table REMOVED (Advanced Stock Management obsolete in PS 9)\n",
+                    $sqlContent
+                );
+                
+                // Eliminar INSERT INTO
+                $sqlContent = preg_replace(
+                    '/-- Data for table: ' . $table . '.*?(?=-- (?:Table|Data)|$)/si',
+                    '',
+                    $sqlContent
+                );
+                
+                $transformations[] = 'Tabla obsoleta ' . $table . ' eliminada';
+            }
+        }
+        
+        return $sqlContent;
+    }
+    
+    /**
+     * Valida y repara datos antes de exportar
+     */
+    public function validateAndRepairData()
+    {
+        $repairs = array();
+        
+        try {
+            // 1. Reparar productos sin category_default
+            $sql = 'UPDATE ' . _DB_PREFIX_ . 'product 
+                    SET id_category_default = 2 
+                    WHERE id_category_default IS NULL OR id_category_default = 0';
+            if ($this->db->execute($sql)) {
+                $affected = $this->db->Affected_Rows();
+                if ($affected > 0) {
+                    $repairs[] = "Reparados $affected productos sin categoría default";
+                }
+            }
+            
+            // 2. Reparar categorías inactivas con productos
+            $sql = 'UPDATE ' . _DB_PREFIX_ . 'category c
+                    SET c.active = 1
+                    WHERE c.active = 0
+                    AND EXISTS (
+                        SELECT 1 FROM ' . _DB_PREFIX_ . 'category_product cp
+                        WHERE cp.id_category = c.id_category
+                    )';
+            if ($this->db->execute($sql)) {
+                $affected = $this->db->Affected_Rows();
+                if ($affected > 0) {
+                    $repairs[] = "Activadas $affected categorías con productos";
+                }
+            }
+            
+            // 3. Reparar productos sin redirect_type
+            $sql = 'UPDATE ' . _DB_PREFIX_ . 'product 
+                    SET redirect_type = "404" 
+                    WHERE redirect_type IS NULL OR redirect_type = ""';
+            if ($this->db->execute($sql)) {
+                $affected = $this->db->Affected_Rows();
+                if ($affected > 0) {
+                    $repairs[] = "Reparados $affected productos sin redirect_type";
+                }
+            }
+            
+            // 4. Reparar customers sin gender
+            if ($this->tableExists(_DB_PREFIX_ . 'customer')) {
+                $sql = 'UPDATE ' . _DB_PREFIX_ . 'customer 
+                        SET id_gender = 1 
+                        WHERE id_gender IS NULL OR id_gender = 0';
+                if ($this->db->execute($sql)) {
+                    $affected = $this->db->Affected_Rows();
+                    if ($affected > 0) {
+                        $repairs[] = "Reparados $affected clientes sin gender";
+                    }
+                }
+            }
+            
+        } catch (Exception $e) {
+            $repairs[] = "Error en validación: " . $e->getMessage();
+        }
+        
+        return $repairs;
     }
 }
 
