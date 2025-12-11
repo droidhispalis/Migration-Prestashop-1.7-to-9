@@ -198,19 +198,44 @@ class AdminPs178to9migrationController extends ModuleAdminController
         
         // Exportar tema
         $html .= '<h4><i class="icon-paint-brush"></i> ' . $this->l('Export Theme') . '</h4>';
-        $html .= '<p>' . $this->l('Export the active theme from PrestaShop 1.7.6') . '</p>';
-        $html .= '<div class="alert alert-warning">';
-        $html .= '<i class="icon-warning"></i> <strong>' . $this->l('Important:') . '</strong> ';
-        $html .= $this->l('Themes from PrestaShop 1.7.6 require manual adaptation for PrestaShop 9. The export will include instructions.');
+        $html .= '<p>' . $this->l('Export the active theme from PrestaShop 1.7.x to adapt for PrestaShop 9') . '</p>';
+        
+        $html .= '<div class="alert alert-danger">';
+        $html .= '<h4><i class="icon-exclamation-triangle"></i> <strong>' . $this->l('CRITICAL WARNING:') . '</strong></h4>';
+        $html .= '<p>' . $this->l('Themes from PrestaShop 1.7.x are NOT directly compatible with PrestaShop 9!') . '</p>';
+        $html .= '<p>' . $this->l('The exported theme will require MANUAL ADAPTATION:') . '</p>';
+        $html .= '<ul>';
+        $html .= '<li>Update theme.yml (PHP 8.1+, compatibility 9.0+)</li>';
+        $html .= '<li>Create composer.json</li>';
+        $html .= '<li>Update Smarty templates (Smarty 4)</li>';
+        $html .= '<li>Replace deprecated hooks</li>';
+        $html .= '<li>Recompile assets with Webpack 5</li>';
+        $html .= '<li>Update Bootstrap 4 → Bootstrap 5</li>';
+        $html .= '</ul>';
+        $html .= '<p><strong>' . $this->l('Read the complete guide:') . '</strong> ';
+        $html .= '<a href="https://github.com/droidhispalis/Migration-Prestashop-1.7-to-9/blob/main/THEME_COMPATIBILITY_GUIDE.md" target="_blank" class="btn btn-sm btn-primary">';
+        $html .= '<i class="icon-book"></i> Theme Compatibility Guide</a></p>';
+        $html .= '</div>';
+        
+        $html .= '<div class="alert alert-info">';
+        $html .= '<h5><i class="icon-lightbulb-o"></i> ' . $this->l('Recommendation:') . '</h5>';
+        $html .= '<p>' . $this->l('For most users, we recommend:') . '</p>';
+        $html .= '<ol>';
+        $html .= '<li><strong>' . $this->l('Use Classic Theme PS 9') . '</strong> ' . $this->l('(included by default)') . '</li>';
+        $html .= '<li><strong>' . $this->l('Or buy a PS 9 compatible theme') . '</strong> ' . $this->l('from marketplace') . '</li>';
+        $html .= '<li><strong>' . $this->l('Apply your branding') . '</strong> ' . $this->l('(logo, colors, custom CSS)') . '</li>';
+        $html .= '</ol>';
+        $html .= '<p class="text-muted"><small>' . $this->l('Manual theme adaptation requires advanced PHP/JavaScript/CSS knowledge and can take 20-40 hours.') . '</small></p>';
         $html .= '</div>';
         
         $html .= '<form method="POST" action="' . $this->context->link->getAdminLink('AdminPs178to9migration') . '">';
+        $html .= '<p><label><input type="checkbox" name="confirm_theme_export" required> ';
+        $html .= '<strong>' . $this->l('I understand that the theme requires manual adaptation and I have read the compatibility guide.') . '</strong>';
+        $html .= '</label></p>';
         $html .= '<button type="submit" name="submitExportTheme" class="btn btn-warning">';
-        $html .= '<i class="icon-download"></i> ' . $this->l('Export Active Theme');
+        $html .= '<i class="icon-download"></i> ' . $this->l('Export Active Theme (Advanced Users Only)');
         $html .= '</button>';
-        $html .= '</form>';
-        
-        $html .= '</div>';
+        $html .= '</form>'; $html .= '</div>';
         $html .= '</div>';
         
         return $html;

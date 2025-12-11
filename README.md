@@ -302,9 +302,16 @@ WHERE id_gender IS NULL OR id_gender = 0;
 - 🔧 **Technical Details:** [IMPLEMENTACION_TRANSFORMACIONES_PS9.md](../IMPLEMENTACION_TRANSFORMACIONES_PS9.md)
 - ✅ **Testing Guide:** [GUIA_RAPIDA_TESTING.md](../GUIA_RAPIDA_TESTING.md)
 - 🔍 **Verification Script:** [VERIFICAR_TRANSFORMACIONES_PS9.sql](../VERIFICAR_TRANSFORMACIONES_PS9.sql)
+- 🎨 **Theme Compatibility:** [THEME_COMPATIBILITY_GUIDE.md](./THEME_COMPATIBILITY_GUIDE.md) ⚠️ **IMPORTANT**
 
 ### Pre-Export Fixes
 - 📝 **Gender & Orders Fix:** [sql/FIX_GENDER_ORDERS.sql](./sql/FIX_GENDER_ORDERS.sql)
+
+### Theme Migration
+- ⚠️ **CRITICAL:** Themes from PS 1.7 are **NOT directly compatible** with PS 9
+- 📖 **Full Guide:** [THEME_COMPATIBILITY_GUIDE.md](./THEME_COMPATIBILITY_GUIDE.md)
+- 📤 **Theme Export:** Available in module (requires manual adaptation)
+- 🔧 **Manual Steps Required:** See compatibility guide for details
 
 ### Import Module (PS 9)
 - 📥 **Importer Repository:** [GitHub - Migration Prestashop 9](https://github.com/droidhispalis/Migration-Prestashop-9-fro-1.7.6)
