@@ -1,37 +1,41 @@
-# PrestaShop Module .gitignore
+# PrestaShop Module - Git Ignore
 
-# Config files with sensitive data
-config_local.xml
-config_local.json
+# Archivos de exportación generados
+*.sql
+*.zip
+ps1_7_to_ps9_export_*.sql
+ps9-export/
+backup_*.sql
+images_export_*.zip
 
-# Temporary files
-*.tmp
-*.bak
-*.swp
-*~
+# Backups
+MODULO_ORIGINAL_BACKUP/
+MODULO_FUNCIONAL_ORIGINAL/
 
-# IDE files
-.idea/
-.vscode/
-*.sublime-project
-*.sublime-workspace
+# Documentos temporales
+*.odt
+*.pdf
+~$*.odt
 
-# OS files
+# Node modules (si los hay)
+node_modules/
+
+# Logs
+*.log
+var/logs/
+
+# Sistema operativo
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# Logs
-*.log
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# Composer
-vendor/
-composer.lock
-
-# Node modules (if any)
-node_modules/
-package-lock.json
-
-# Build files
-dist/
-build/
+# Temporal
+tmp/
+temp/
