@@ -1,0 +1,53 @@
+VERIFICACIÓN DEL MÓDULO PS9CSVEXPORT v2.0.0
+==============================================
+
+✅ EXPORTACIÓN:
+- Products: SIN columna ID (auto-generado por PS9)
+- Categories: SIN columna ID (auto-generado por PS9)
+- Brands/Suppliers: SIN columna ID
+- Formato CSV: UTF-8 BOM, separador ";"
+- unit_price: VACÍO (PS9 lo calcula automáticamente)
+- Categorías: Usa NOMBRES en "Parent category", no IDs
+
+✅ IMPORTACIÓN:
+- SQL: Usa backticks `tabla` y comillas simples 'valor'
+- _DB_PREFIX_: Dinámico (funciona con ps_, mig_, etc.)
+- Try-catch: En todas las consultas SQL
+- Categorías padre: Maneja "Home", "Root", "1", "2"
+- Productos: Busca por referencia, no por ID
+- Campos obligatorios: id_shop_default, redirect_type, etc.
+
+✅ INTERFAZ:
+- Panel de exportación: 6 tipos de entidades
+- Panel de importación: Upload + Import desde servidor
+- Reportes detallados: Importados, Omitidos, Errores, Warnings
+
+✅ COMPATIBILIDAD:
+- PrestaShop 1.7.x (exportación)
+- PrestaShop 9.0.x (importación)
+- Cualquier prefijo de base de datos
+- Multi-idioma
+- Multi-tienda
+
+ORDEN DE IMPORTACIÓN RECOMENDADO:
+1. Categories
+2. Brands
+3. Suppliers  
+4. Products (requiere Categories)
+5. Customers
+6. Addresses (requiere Customers)
+
+ARCHIVOS DEL MÓDULO:
+- ps9csvexport.php (248 líneas)
+- classes/CSVExportService.php (777 líneas)
+- classes/CSVImportService.php (707 líneas)
+- classes/ImageExportService.php
+- classes/index.php
+- views/templates/admin/configure.tpl
+- views/templates/admin/index.php
+- views/templates/index.php
+- views/index.php
+- index.php
+
+ÚLTIMA ACTUALIZACIÓN: 20 enero 2026
+VERSIÓN: 2.0.0

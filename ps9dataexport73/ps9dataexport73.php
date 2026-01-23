@@ -7,7 +7,7 @@ class Ps9DataExport73 extends Module
     {
         $this->name = 'ps9dataexport73';
         $this->tab = 'administration';
-        $this->version = '1.3.4';
+        $this->version = '2.2.0';
         $this->author = 'Custom';
         $this->need_instance = 0;
         $this->bootstrap = true;
@@ -68,14 +68,18 @@ class Ps9DataExport73 extends Module
         
         if (Tools::getValue('ajax') === '1') {
             $action = Tools::getValue('action');
+            if ($action === 'runTests') return $this->ajaxRunTests();
             if ($action === 'validate') return $this->ajaxValidate();
             if ($action === 'repair') return $this->ajaxRepair();
             if ($action === 'exportSql') return $this->ajaxExport();
+            if ($action === 'exportCSV') return $this->ajaxExportCSV();
             if ($action === 'exportImages') return $this->ajaxExportImages();
             if ($action === 'listFiles') return $this->ajaxListFiles();
+            if ($action === 'deleteFile') return $this->ajaxDeleteFile();
             if ($action === 'uploadFile') return $this->ajaxUploadFile();
             if ($action === 'validateImport') return $this->ajaxValidateImport();
             if ($action === 'import') return $this->ajaxImport();
+            if ($action === 'emergencyRestore') return $this->ajaxEmergencyRestore();
 
             header('Content-Type: application/json; charset=utf-8', true, 400);
             die(json_encode(array('ok' => false, 'error' => 'Unknown action')));
@@ -120,6 +124,40 @@ class Ps9DataExport73 extends Module
         die(json_encode(array('ok' => true, 'files' => $files)));
     }
     
+    private function ajaxDeleteFile()
+    {
+        $fileName = Tools::getValue('file');
+        
+        if (empty($fileName)) {
+            header('Content-Type: application/json; charset=utf-8', true, 400);
+            die(json_encode(array('ok' => false, 'error' => 'Nombre de archivo no especificado')));
+        }
+        
+        $exportDir = _PS_DOWNLOAD_DIR_.'ps9-export';
+        $filePath = $exportDir . '/' . basename($fileName); // basename para seguridad
+        
+        if (!file_exists($filePath)) {
+            header('Content-Type: application/json; charset=utf-8', true, 404);
+            die(json_encode(array('ok' => false, 'error' => 'Archivo no encontrado')));
+        }
+        
+        if (!is_file($filePath)) {
+            header('Content-Type: application/json; charset=utf-8', true, 400);
+            die(json_encode(array('ok' => false, 'error' => 'No es un archivo válido')));
+        }
+        
+        if (@unlink($filePath)) {
+            header('Content-Type: application/json; charset=utf-8');
+            die(json_encode(array(
+                'ok' => true,
+                'message' => 'Archivo eliminado: ' . $fileName
+            )));
+        } else {
+            header('Content-Type: application/json; charset=utf-8', true, 500);
+            die(json_encode(array('ok' => false, 'error' => 'No se pudo eliminar el archivo. Verifica permisos.')));
+        }
+    }
+    
     private function ajaxUploadFile()
     {
         if (!isset($_FILES['sqlfile']) || $_FILES['sqlfile']['error'] !== UPLOAD_ERR_OK) {
@@ -153,6 +191,27 @@ class Ps9DataExport73 extends Module
         } else {
             header('Content-Type: application/json; charset=utf-8', true, 500);
             die(json_encode(array('ok' => false, 'error' => 'Error al mover el archivo')));
+        }
+    }
+
+    private function ajaxRunTests()
+    {
+        require_once __DIR__.'/classes/PS9ExportTester.php';
+        
+        try {
+            ob_start();
+            $tester = new PS9ExportTester();
+            $result = $tester->runAllTests();
+            $output = ob_get_clean();
+            
+            $result['output'] = $output;
+            
+            header('Content-Type: application/json; charset=utf-8');
+            die(json_encode($result));
+        } catch (Exception $e) {
+            ob_end_clean();
+            header('Content-Type: application/json; charset=utf-8', true, 500);
+            die(json_encode(array('ok' => false, 'error' => $e->getMessage())));
         }
     }
 
@@ -220,6 +279,69 @@ class Ps9DataExport73 extends Module
                 'customers' => $optCustomers,
                 'orders' => $optOrders,
             ));
+
+            header('Content-Type: application/json; charset=utf-8');
+            die(json_encode($result));
+        } catch (Exception $e) {
+            header('Content-Type: application/json; charset=utf-8', true, 500);
+            die(json_encode(array('ok' => false, 'error' => $e->getMessage())));
+        }
+    }
+    
+    /**
+     * EXPORTAR A CSV formato OFICIAL PrestaShop
+     * Compatible con el importador nativo de PS9
+     */
+    private function ajaxExportCSV()
+    {
+        require_once __DIR__.'/classes/CSVExportService.php';
+
+        $shopId = (int)Tools::getValue('shop_id', $this->context->shop->id);
+        $langId = (int)Tools::getValue('lang_id', $this->context->language->id);
+        $exportType = Tools::getValue('export_type', 'products');
+
+        try {
+            $outDir = _PS_DOWNLOAD_DIR_.'ps9-export';
+            if (!is_dir($outDir)) {
+                mkdir($outDir, 0775, true);
+            }
+            
+            $svc = new CSVExportService($shopId, $langId);
+            $timestamp = date('Ymd_His');
+            
+            switch ($exportType) {
+                case 'categories':
+                    $filename = "categories_csv_{$timestamp}.csv";
+                    $result = $svc->exportCategories($outDir . '/' . $filename);
+                    break;
+                    
+                case 'brands':
+                    $filename = "brands_csv_{$timestamp}.csv";
+                    $result = $svc->exportBrands($outDir . '/' . $filename);
+                    break;
+                    
+                case 'suppliers':
+                    $filename = "suppliers_csv_{$timestamp}.csv";
+                    $result = $svc->exportSuppliers($outDir . '/' . $filename);
+                    break;
+                    
+                case 'customers':
+                    $filename = "customers_csv_{$timestamp}.csv";
+                    $result = $svc->exportCustomers($outDir . '/' . $filename);
+                    break;
+                    
+                case 'addresses':
+                    $filename = "addresses_csv_{$timestamp}.csv";
+                    $result = $svc->exportAddresses($outDir . '/' . $filename);
+                    break;
+                    
+                default: // products
+                    $filename = "products_csv_{$timestamp}.csv";
+                    $result = $svc->exportProducts($outDir . '/' . $filename);
+                    break;
+            }
+            
+            $result['filename'] = $filename;
 
             header('Content-Type: application/json; charset=utf-8');
             die(json_encode($result));
@@ -300,6 +422,47 @@ class Ps9DataExport73 extends Module
             
             header('Content-Type: application/json; charset=utf-8');
             die(json_encode($result));
+        } catch (Exception $e) {
+            header('Content-Type: application/json; charset=utf-8', true, 500);
+            die(json_encode(array('ok' => false, 'error' => $e->getMessage())));
+        }
+    }
+    
+    /**
+     * RESTAURAR BACKUP DE EMERGENCIA
+     * Para cuando el import rompe la BD
+     */
+    private function ajaxEmergencyRestore()
+    {
+        require_once __DIR__.'/classes/ImportService.php';
+        
+        $fileName = Tools::getValue('file');
+        if (empty($fileName)) {
+            header('Content-Type: application/json; charset=utf-8', true, 400);
+            die(json_encode(array('ok' => false, 'error' => 'No backup file specified')));
+        }
+        
+        try {
+            $exportDir = _PS_DOWNLOAD_DIR_.'ps9-export';
+            $backupFile = $exportDir . '/' . basename($fileName);
+            
+            if (!file_exists($backupFile)) {
+                throw new Exception('Backup file not found: ' . $fileName);
+            }
+            
+            if (strpos($fileName, 'backup_before_import_') !== 0) {
+                throw new Exception('Invalid backup file - must start with backup_before_import_');
+            }
+            
+            $svc = new ImportService();
+            $result = $svc->rollback($backupFile);
+            
+            header('Content-Type: application/json; charset=utf-8');
+            die(json_encode(array(
+                'ok' => true,
+                'message' => 'Emergency restore completed successfully',
+                'restored' => $result
+            )));
         } catch (Exception $e) {
             header('Content-Type: application/json; charset=utf-8', true, 500);
             die(json_encode(array('ok' => false, 'error' => $e->getMessage())));
